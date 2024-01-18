@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+
+<!-- Load d3.js & color scale-->
+<script src="https://d3js.org/d3.v4.js"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+
+<!-- Stylesheet -->
+<style>
+  #chart {
+    text-align: center;
+    margin-top: 120px;
+  }
+
+  text {
+    user-select: none;
+    font-family: "Courier New", Courier, monospace;
+  }
+
+  .series:nth-child(1),
+  .series:nth-child(2) {
+    transform: translate(0, 10px);
+  }
+
+  .series:nth-child(5),
+  .series:nth-child(6) {
+    transform: translate(0, -10px);
+  }
+
+  #label1 {
+    text-anchor: middle;
+    color: #555555;
+    font-size: 15px;
+  }
+
+  #label2 {
+    text-anchor: middle;
+    color: #555555;
+    font-size: 15px;
+  }
+
+  .domain {
+    opacity: 0;
+  }
+</style>
+
+<!-- Create a div where the graph will take place -->
+<div id="chart"></div>
+
+<script>
+  // Fake Data
+  let data = [
+    {
+      date: new Date(2023, 7, 7),
+      aData: 35,
+      bData: 15,
+      cData: 30,
+    },
+    {
+      date: new Date(2023, 7, 28),
+      aData: 28,
+      bData: 24,
+      cData: 30,
+    },
+    {
+      date: new Date(2023, 8, 17),
+      aData: 21.5,
+      bData: 29.5,
+      cData: 33,
+    },
+    {
+      date: new Date(2023, 8, 19),
+      aData: 21,
+      bData: 30,
+      cData: 32.5,
+    },
+    {
+      date: new Date(2023, 8, 22),
+      aData: 20,
+      bData: 32,
+      cData: 31,
+    },
+    {
+      date: new Date(2023, 9, 12),
+      aData: 25,
+      bData: 34.5,
+      cData: 20,
+    },
+    {
+      date: new Date(2023, 9, 15),
+      aData: 26,
+      bData: 34,
+      cData: 19,
+    },
+    {
+      date: new Date(2023, 9, 19),
+      aData: 27,
+      bData: 34,
+      cData: 19,
+    },
+    {
+      date: new Date(2023, 10, 1),
+      aData: 27,
+      bData: 36,
+      cData: 19.5,
+    },
+    {
+      date: new Date(2023, 10, 14),
+      aData: 27,
+      bData: 34,
+      cData: 24,
+    },
+    {
+      date: new Date(2023, 10, 19),
+      aData: 27,
+      bData: 33.5,
+      cData: 24.5,
+    },
+    {
+      date: new Date(2023, 11, 16),
+      aData: 41,
+      bData: 13,
+      cData: 26,
+    },
+    {
+      date: new Date(2023, 11, 19),
+      aData: 42,
+      bData: 13,
+      cData: 26,
+    },
+    {
+      date: new Date(2024, 0, 12),
+      aData: 31,
+      bData: 32,
+      cData: 22,
+    },
+    {
+      date: new Date(2024, 0, 20),
+      aData: 27,
+      bData: 37.5,
+      cData: 18.5,
+    },
+    {
+      date: new Date(2024, 1, 1),
+      aData: 22,
+      bData: 45,
+      cData: 14,
+    },
+  ];
+  for (let i = 0; i < data.length; ++i)
+    data[i] = { ...data[i], aStrokeData: 1, bStrokeData: 1, cStrokeData: 1 };
+
+  // Create SVG and padding for the Chart
+  const svg = d3
+    .select("#chart")
+    .append("svg")
+    .attr("height", 540)
+    .attr("width", 950);
+
+  const strokeWidth = 2.5;
+  const margin = { top: 10, bottom: 80, left: 70, right: 20 };
+  const chart = svg
+    .append("g")
+    .attr("transform", `translate(${margin.left}, 0)`);
+
+  const width =
+    +svg.attr("width") - margin.left - margin.right - strokeWidth * 2;
+  const height = +svg.attr("height") - margin.top - margin.bottom;
+  const grp = chart
+    .append("g")
+    .attr(
+      "transform",
+      `translate(-${margin.left - strokeWidth},-${margin.top})`
+    );
+
+  // Create Stack
+  const stack = d3
+    .stack()
+    .keys([
+      "aData",
+      "aStrokeData",
+      "bData",
+      "bStrokeData",
+      "cData",
+      "cStrokeData",
+    ]);
+  const stackedValues = stack(data);
+  const stackedData = [];
+  // Copy the stack offsets back into the data.
+  stackedValues.forEach((layer, index) => {
+    const currentStack = [];
+    layer.forEach((d, i) => {
+      currentStack.push({
+        values: d,
+        date: data[i].date,
+      });
+    });
+    stackedData.push(currentStack);
+  });
+
+  // Create Scales
+  const yScale = d3
+    .scaleLinear()
+    .range([height, 0])
+    .domain([
+      0,
+      d3.max(stackedValues[stackedValues.length - 1], (dp) => dp[1]) + 30,
+    ]);
+  const xScale = d3
+    .scaleTime()
+    .range([0, width])
+    .domain([data[0].date, data[data.length - 1].date]);
+
+  const area = d3
+    .area()
+    .x((dataPoint) => xScale(dataPoint.date))
+    .y0((dataPoint) => yScale(dataPoint.values[0]))
+    .y1((dataPoint) => yScale(dataPoint.values[1]));
+
+  const series = grp
+    .selectAll(".series")
+    .data(stackedData)
+    .enter()
+    .append("g")
+    .attr("class", "series");
+
+  // Add Gradients
+  const fillColor = [
+    "rgba(130, 220, 253, 0.8)",
+    "rgb(60, 205, 253)",
+    "rgba(82, 80, 180, 0.8)",
+    "rgb(18, 15, 152)",
+    "rgba(252, 190, 90, 0.8)",
+    "rgb(250, 180, 60)",
+  ];
+  for (let i = 2; i <= 5; ++i) {
+    // gradient for fill(i = \1,2) and stroke(i = 3,4)
+    svg
+      .append("linearGradient")
+      .attr("id", "line-gradient" + i)
+      .attr("gradientUnits", "userSpaceOnUse")
+      // .attr("gradientTransform", "rotate(90)")
+      .attr("x1", 0)
+      .attr("y1", i % 2 ? 100 : 200)
+      .attr("x2", 0)
+      .attr("y2", i % 2 ? 500 : 450)
+      .selectAll("stop")
+      .data([
+        { offset: "0%", color: fillColor[i] },
+        {
+          offset: "100%",
+          color: i % 2 ? fillColor[i] : "rgba(255, 255, 255, 0)",
+        },
+        // strokeColor[i - 2].slice(0, strokeColor[i - 2].lastIndexOf(")") - 1) + ", 0.1" + strokeColor[i - 2].slice(strokeColor[i - 2].lastIndexOf(")"))
+      ])
+      .enter()
+      .append("stop")
+      .attr("offset", function (d) {
+        return d.offset;
+      })
+      .attr("stop-color", function (d) {
+        return d.color;
+      });
+  }
+
+  // Add three Series
+  series
+    .append("path")
+    .attr("transform", `translate(${margin.left},0)`)
+    .style("fill", (d, i) => {
+      if (i > 1) return `url(#line-gradient${i})`;
+      return fillColor[i];
+    })
+    // .attr("stroke", (d, i) => strokeColor[i])
+    .attr("stroke", "none")
+    .attr("stroke-linejoin", "round")
+    .attr("stroke-linecap", "round")
+    .attr("stroke-width", strokeWidth)
+    .attr("d", (d) => area(d));
+
+  // Add Rect
+  chart
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("height", height + 1)
+    .attr("width", width + 3)
+    .style("fill", "rgba(200, 200, 200, 0.1)")
+    .style("stroke", "none");
+
+  /*--- Add Axis ---*/
+  // Add the Y Axis
+  const tickYValues = ["0", "20", "40", "60", "80", "100"];
+  chart
+    .append("g")
+    .attr("transform", `translate(0, 0)`)
+    .call(
+      d3
+        .axisLeft(yScale)
+        .tickSize(0)
+        .tickPadding(12)
+        .ticks(tickYValues.length)
+        .tickValues(tickYValues)
+    )
+    .selectAll("text")
+    .style("font-size", 10)
+    .style("fill", "#999999");
+  // Add the X Axis
+  const tickXValues = [];
+  for (let i = 7; i <= 12; ++i)
+    tickXValues.push(new Date(2023 + (i == 12), i % 12, 19 + (i == 12)));
+  chart
+    .append("g")
+    .attr("transform", `translate(0, ${height})`)
+    .call(
+      d3
+        .axisBottom(xScale)
+        .tickSize(0)
+        .tickPadding(12)
+        .ticks(tickXValues.length)
+        .tickValues(tickXValues)
+        .tickFormat(d3.timeFormat("%b %d"))
+    )
+    .selectAll("text")
+    .style("font-size", 12)
+    .style("fill", "#999999");
+
+  /*--- Add Labels ---*/
+  // Y Axis Label
+  chart
+    .append("text")
+    .attr("id", "label1")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -height / 2)
+    .attr("y", -50)
+    .text("AVG SCORE")
+    .selectAll("text")
+    .style("font-size", 12)
+    .style("fill", "#999999");
+  // X Axis Label
+  chart
+    .append("text")
+    .attr("id", "label2")
+    .attr("x", width / 2)
+    .attr("y", height + 60)
+    .text("SNAPSHOT DATE")
+    .selectAll("text")
+    .style("font-size", 10)
+    .style("fill", "#999999");
+
+  // Add Dashed Grid
+  for (let i = height - 60; i >= 0; i -= 60)
+    chart
+      .append("line")
+      .attr("x1", 0)
+      .attr("y1", i)
+      .attr("x2", width)
+      .attr("y2", i)
+      .attr("stroke", "rgba(100, 100, 100, 0.2)")
+      .attr("stroke-dasharray", "10 6")
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", 1);
+  for (let i = 60; i <= width; i += 60)
+    chart
+      .append("line")
+      .attr("x1", i)
+      .attr("y1", 0)
+      .attr("x2", i)
+      .attr("y2", height)
+      .attr("stroke", "rgba(100, 100, 100, 0.2)")
+      .attr("stroke-dasharray", "10 6")
+      .attr("stroke-linejoin", "round")
+      .attr("stroke-linecap", "round")
+      .attr("stroke-width", 1);
+</script>
